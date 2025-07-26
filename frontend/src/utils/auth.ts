@@ -92,6 +92,57 @@ export async function signup(username: string, password: string) {
   }
 }
 
+export async function getOIDCConfig() {
+  const res = await fetch(`${baseURL}/api/auth/oidc/config`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (res.status === 200) {
+    return await res.json();
+  } else {
+    throw new StatusError(
+      `${res.status} ${res.statusText}`,
+      res.status
+    );
+  }
+}
+
+export function redirectToOIDC(authURL: string) {
+  window.location.href = authURL;
+}
+
+export async function handleOIDCCallback() {
+  // This function would be called when the user returns from OIDC provider
+  // The callback endpoint should handle the token exchange and return a JWT
+  const urlParams = new URLSearchParams(window.location.search);
+  const code = urlParams.get('code');
+  const state = urlParams.get('state');
+
+  if (!code) {
+    throw new Error('No authorization code received from OIDC provider');
+  }
+
+  const res = await fetch(`${baseURL}/api/auth/oidc/callback?code=${code}&state=${state}`, {
+    method: "GET",
+  });
+
+  const body = await res.text();
+
+  if (res.status === 200) {
+    parseToken(body);
+    // Redirect to the intended page or home
+    router.push({ path: "/" });
+  } else {
+    throw new StatusError(
+      body || `${res.status} ${res.statusText}`,
+      res.status
+    );
+  }
+}
+
 export function logout() {
   document.cookie = "auth=; Max-Age=0; Path=/; SameSite=Strict;";
 

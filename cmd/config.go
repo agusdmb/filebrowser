@@ -38,6 +38,17 @@ func addConfigFlags(flags *pflag.FlagSet) {
 	flags.String("auth.method", string(auth.MethodJSONAuth), "authentication type")
 	flags.String("auth.header", "", "HTTP header for auth.method=proxy")
 	flags.String("auth.command", "", "command for auth.method=hook")
+	
+	// OIDC flags
+	flags.String("oidc.provider-url", "", "OIDC provider URL for auth.method=oidc")
+	flags.String("oidc.client-id", "", "OIDC client ID for auth.method=oidc")
+	flags.String("oidc.client-secret", "", "OIDC client secret for auth.method=oidc")
+	flags.String("oidc.redirect-uri", "", "OIDC redirect URI for auth.method=oidc")
+	flags.StringSlice("oidc.scopes", []string{"openid", "profile", "email"}, "OIDC scopes for auth.method=oidc")
+	flags.Bool("oidc.auto-create-user", true, "automatically create users from OIDC claims")
+	flags.String("oidc.username-claim", "preferred_username", "OIDC claim to use for username")
+	flags.String("oidc.email-claim", "email", "OIDC claim to use for email")
+	flags.String("oidc.groups-claim", "groups", "OIDC claim to use for groups")
 
 	flags.String("recaptcha.host", "https://www.google.com", "use another host for ReCAPTCHA. recaptcha.net might be useful in China")
 	flags.String("recaptcha.key", "", "ReCaptcha site key")
@@ -161,6 +172,107 @@ func getHookAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (au
 	return &auth.HookAuth{Command: command}, nil
 }
 
+func getOIDCAuth(flags *pflag.FlagSet, defaultAuther map[string]interface{}) (auth.Auther, error) {
+	providerURL, err := getString(flags, "oidc.provider-url")
+	if err != nil {
+		return nil, err
+	}
+	clientID, err := getString(flags, "oidc.client-id")
+	if err != nil {
+		return nil, err
+	}
+	clientSecret, err := getString(flags, "oidc.client-secret")
+	if err != nil {
+		return nil, err
+	}
+	redirectURI, err := getString(flags, "oidc.redirect-uri")
+	if err != nil {
+		return nil, err
+	}
+	scopes, err := getStringSlice(flags, "oidc.scopes")
+	if err != nil {
+		return nil, err
+	}
+	autoCreateUser, err := getBool(flags, "oidc.auto-create-user")
+	if err != nil {
+		return nil, err
+	}
+	usernameClaim, err := getString(flags, "oidc.username-claim")
+	if err != nil {
+		return nil, err
+	}
+	emailClaim, err := getString(flags, "oidc.email-claim")
+	if err != nil {
+		return nil, err
+	}
+	groupsClaim, err := getString(flags, "oidc.groups-claim")
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply defaults if values are empty
+	if providerURL == "" && defaultAuther != nil {
+		if config, ok := defaultAuther["config"].(map[string]interface{}); ok {
+			if val, ok := config["providerURL"].(string); ok {
+				providerURL = val
+			}
+		}
+	}
+	if clientID == "" && defaultAuther != nil {
+		if config, ok := defaultAuther["config"].(map[string]interface{}); ok {
+			if val, ok := config["clientID"].(string); ok {
+				clientID = val
+			}
+		}
+	}
+	if clientSecret == "" && defaultAuther != nil {
+		if config, ok := defaultAuther["config"].(map[string]interface{}); ok {
+			if val, ok := config["clientSecret"].(string); ok {
+				clientSecret = val
+			}
+		}
+	}
+	if redirectURI == "" && defaultAuther != nil {
+		if config, ok := defaultAuther["config"].(map[string]interface{}); ok {
+			if val, ok := config["redirectURI"].(string); ok {
+				redirectURI = val
+			}
+		}
+	}
+
+	// Validate required fields
+	if providerURL == "" {
+		return nil, nerrors.New("you must set the flag 'oidc.provider-url' for method 'oidc'")
+	}
+	if clientID == "" {
+		return nil, nerrors.New("you must set the flag 'oidc.client-id' for method 'oidc'")
+	}
+	if clientSecret == "" {
+		return nil, nerrors.New("you must set the flag 'oidc.client-secret' for method 'oidc'")
+	}
+	if redirectURI == "" {
+		return nil, nerrors.New("you must set the flag 'oidc.redirect-uri' for method 'oidc'")
+	}
+
+	oidcAuth := &auth.OIDCAuth{
+		Config: &auth.OIDCConfig{
+			ProviderURL:    providerURL,
+			ClientID:       clientID,
+			ClientSecret:   clientSecret,
+			RedirectURI:    redirectURI,
+			Scopes:         scopes,
+			AutoCreateUser: autoCreateUser,
+			ClaimMappings: auth.ClaimMappings{
+				Username: usernameClaim,
+				Email:    emailClaim,
+				Groups:   groupsClaim,
+			},
+		},
+	}
+
+	return oidcAuth, nil
+}
+
 func getAuthentication(flags *pflag.FlagSet, defaults ...interface{}) (settings.AuthMethod, auth.Auther, error) {
 	method, defaultAuther, err := getAuthMethod(flags, defaults...)
 	if err != nil {
@@ -177,6 +289,8 @@ func getAuthentication(flags *pflag.FlagSet, defaults ...interface{}) (settings.
 		auther, err = getJSONAuth(flags, defaultAuther)
 	case auth.MethodHookAuth:
 		auther, err = getHookAuth(flags, defaultAuther)
+	case auth.MethodOIDCAuth:
+		auther, err = getOIDCAuth(flags, defaultAuther)
 	default:
 		return "", nil, errors.ErrInvalidAuthMethod
 	}

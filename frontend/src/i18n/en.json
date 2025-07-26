@@ -93,6 +93,8 @@
   "login": {
     "createAnAccount": "Create an account",
     "loginInstead": "Already have an account",
+    "oidcLogin": "Login with SSO",
+    "oidcError": "OIDC authentication failed",
     "password": "Password",
     "passwordConfirm": "Password Confirmation",
     "passwordsDontMatch": "Passwords don't match",

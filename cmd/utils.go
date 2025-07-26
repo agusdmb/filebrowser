@@ -57,6 +57,11 @@ func getUint(flags *pflag.FlagSet, flag string) (uint, error) {
 	return b, returnErr(err)
 }
 
+func getStringSlice(flags *pflag.FlagSet, flag string) ([]string, error) {
+	s, err := flags.GetStringSlice(flag)
+	return s, returnErr(err)
+}
+
 func generateKey() []byte {
 	k, err := settings.GenerateKey()
 	if err != nil {

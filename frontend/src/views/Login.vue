@@ -1,6 +1,20 @@
 <template>
   <div id="login" :class="{ recaptcha: recaptcha }">
-    <form @submit="submit">
+    <div v-if="oidcConfig.enabled" class="oidc-login">
+      <img :src="logoURL" alt="File Browser" />
+      <h1>{{ name }}</h1>
+      <div v-if="error !== ''" class="wrong">{{ error }}</div>
+      
+      <button
+        class="button button--block oidc-button"
+        @click="loginWithOIDC"
+        type="button"
+      >
+        {{ t('login.oidcLogin') }}
+      </button>
+    </div>
+    
+    <form v-else @submit="submit">
       <img :src="logoURL" alt="File Browser" />
       <h1>{{ name }}</h1>
       <div v-if="error !== ''" class="wrong">{{ error }}</div>
@@ -61,6 +75,7 @@ const error = ref<string>("");
 const username = ref<string>("");
 const password = ref<string>("");
 const passwordConfirm = ref<string>("");
+const oidcConfig = ref<{ enabled: boolean; authURL?: string }>({ enabled: false });
 
 const route = useRoute();
 const router = useRouter();
@@ -69,6 +84,12 @@ const { t } = useI18n({});
 const toggleMode = () => (createMode.value = !createMode.value);
 
 const $showError = inject<IToastError>("$showError")!;
+
+const loginWithOIDC = () => {
+  if (oidcConfig.value.authURL) {
+    auth.redirectToOIDC(oidcConfig.value.authURL);
+  }
+};
 
 const submit = async (event: Event) => {
   event.preventDefault();
@@ -115,8 +136,29 @@ const submit = async (event: Event) => {
 };
 
 // Run hooks
-onMounted(() => {
-  if (!recaptcha) return;
+onMounted(async () => {
+  // Check if this is an OIDC callback
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('code')) {
+    try {
+      await auth.handleOIDCCallback();
+      return; // Exit early if OIDC callback is handled
+    } catch (e) {
+      console.error('OIDC callback error:', e);
+      error.value = t('login.oidcError');
+    }
+  }
+
+  // Check OIDC configuration
+  try {
+    oidcConfig.value = await auth.getOIDCConfig();
+  } catch (e) {
+    console.warn('Failed to get OIDC config:', e);
+    // Fall back to regular login
+  }
+
+  // Initialize reCAPTCHA if needed and not using OIDC
+  if (!recaptcha || oidcConfig.value.enabled) return;
 
   window.grecaptcha.ready(function () {
     window.grecaptcha.render("recaptcha", {

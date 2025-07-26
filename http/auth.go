@@ -12,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/golang-jwt/jwt/v4/request"
 
+	"github.com/filebrowser/filebrowser/v2/auth"
 	fbErrors "github.com/filebrowser/filebrowser/v2/errors"
 	"github.com/filebrowser/filebrowser/v2/users"
 )
@@ -178,6 +179,102 @@ var signupHandler = func(_ http.ResponseWriter, r *http.Request, d *data) (int, 
 	}
 
 	return http.StatusOK, nil
+}
+
+type oidcConfigResponse struct {
+	Enabled bool   `json:"enabled"`
+	AuthURL string `json:"authURL,omitempty"`
+}
+
+var oidcConfigHandler = func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+	// Check if OIDC is enabled
+	auther, err := d.store.Auth.Get(d.settings.AuthMethod)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	response := oidcConfigResponse{
+		Enabled: false,
+	}
+
+	if d.settings.AuthMethod == "oidc" {
+		if oidcAuth, ok := auther.(*auth.OIDCAuth); ok && oidcAuth.Config != nil {
+			// Generate state parameter and store it (in production, you'd store this in session/cache)
+			state, err := auth.GenerateState()
+			if err != nil {
+				return http.StatusInternalServerError, err
+			}
+
+			authURL, err := oidcAuth.GetAuthURL(state)
+			if err != nil {
+				return http.StatusInternalServerError, err
+			}
+
+			response.Enabled = true
+			response.AuthURL = authURL
+		}
+	}
+
+	return renderJSON(w, r, response)
+}
+
+var oidcLoginHandler = func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+	// Check if OIDC is enabled
+	if d.settings.AuthMethod != "oidc" {
+		return http.StatusNotFound, nil
+	}
+
+	auther, err := d.store.Auth.Get(d.settings.AuthMethod)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	oidcAuth, ok := auther.(*auth.OIDCAuth)
+	if !ok || oidcAuth.Config == nil {
+		return http.StatusInternalServerError, errors.New("OIDC not configured")
+	}
+
+	// Generate state parameter
+	state, err := auth.GenerateState()
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	// In a production environment, you would store the state in a session or cache
+	// associated with the user's session to validate it in the callback
+
+	authURL, err := oidcAuth.GetAuthURL(state)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	// Redirect to OIDC provider
+	http.Redirect(w, r, authURL, http.StatusFound)
+	return 0, nil
+}
+
+func oidcCallbackHandler(tokenExpireTime time.Duration) handleFunc {
+	return func(w http.ResponseWriter, r *http.Request, d *data) (int, error) {
+		// Check if OIDC is enabled
+		if d.settings.AuthMethod != "oidc" {
+			return http.StatusNotFound, nil
+		}
+
+		auther, err := d.store.Auth.Get(d.settings.AuthMethod)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+
+		user, err := auther.Auth(r, d.store.Users, d.settings, d.server)
+		switch {
+		case errors.Is(err, os.ErrPermission):
+			return http.StatusForbidden, nil
+		case err != nil:
+			return http.StatusInternalServerError, err
+		}
+
+		return printToken(w, r, d, user, tokenExpireTime)
+	}
 }
 
 func renewHandler(tokenExpireTime time.Duration) handleFunc {

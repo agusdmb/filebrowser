@@ -27,7 +27,7 @@ import("dayjs/locale/vi");
 import("dayjs/locale/zh-cn");
 import("dayjs/locale/zh-tw");
 import("dayjs/locale/cs");
-import("dayjs/locale/no");
+import("dayjs/locale/nb");
 
 // All i18n resources specified in the plugin `include` option can be loaded
 // at once using the import syntax
@@ -116,6 +116,10 @@ export function detectLocale() {
     case /^nl-be\b/.test(locale):
       locale = "nl-be";
       break;
+    case /^no\b/.test(locale):
+    case /^nb\b/.test(locale):
+      locale = "no";
+      break;
     default:
       locale = "en";
   }
@@ -153,7 +157,9 @@ export const isRtl = (locale?: string) => {
 };
 
 export function setLocale(locale: string) {
-  dayjs.locale(locale);
+  // Map locale codes to dayjs locale names
+  const dayjsLocale = locale === "no" ? "nb" : locale;
+  dayjs.locale(dayjsLocale);
   // according to doc u only need .value if legacy: false but they lied
   // https://vue-i18n.intlify.dev/guide/essentials/scope.html#local-scope-1
   // @ts-expect-error incorrect type when legacy

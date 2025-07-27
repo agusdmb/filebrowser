@@ -18,10 +18,31 @@ export function parseToken(token: string) {
   authStore.setUser(data.user);
 }
 
+function getCookie(name: string): string | null {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    return parts.pop()?.split(';').shift() || null;
+  }
+  return null;
+}
+
 export async function validateLogin() {
   try {
-    if (localStorage.getItem("jwt")) {
-      await renew(<string>localStorage.getItem("jwt"));
+    let token = localStorage.getItem("jwt");
+    
+    // If no JWT in localStorage, check for auth cookie (e.g., from OIDC callback)
+    if (!token) {
+      const cookieToken = getCookie("auth");
+      if (cookieToken) {
+        // Parse and store the token from cookie
+        parseToken(cookieToken);
+        return; // parseToken already sets up the auth state
+      }
+    }
+    
+    if (token) {
+      await renew(token);
     }
   } catch (error) {
     console.warn("Invalid JWT token in storage");

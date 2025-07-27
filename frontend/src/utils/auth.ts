@@ -31,10 +31,25 @@ export async function validateLogin() {
   try {
     let token = localStorage.getItem("jwt");
     
+    // Check for token in URL query parameters (from OIDC callback)
+    const urlParams = new URLSearchParams(window.location.search);
+    const tokenFromUrl = urlParams.get('token');
+    if (tokenFromUrl) {
+      console.log("Found token in URL, parsing...");
+      parseToken(tokenFromUrl);
+      // Clean the URL by removing the token parameter
+      const newUrl = new URL(window.location.href);
+      newUrl.searchParams.delete('token');
+      window.history.replaceState({}, '', newUrl.toString());
+      return; // parseToken already sets up the auth state
+    }
+    
     // If no JWT in localStorage, check for auth cookie (e.g., from OIDC callback)
     if (!token) {
       const cookieToken = getCookie("auth");
+      console.log("Checking for auth cookie:", cookieToken ? "found" : "not found");
       if (cookieToken) {
+        console.log("Parsing token from cookie");
         // Parse and store the token from cookie
         parseToken(cookieToken);
         return; // parseToken already sets up the auth state

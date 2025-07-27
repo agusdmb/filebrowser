@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -300,16 +301,18 @@ func oidcCallbackHandler(tokenExpireTime time.Duration) handleFunc {
 			return http.StatusInternalServerError, err
 		}
 
-		// Set cookie and redirect to frontend
+		// Set cookie and redirect to frontend with token parameter
 		http.SetCookie(w, &http.Cookie{
 			Name:     "auth",
 			Value:    signed,
 			Path:     "/",
+			HttpOnly: false, // Allow JavaScript access
 			SameSite: http.SameSiteStrictMode,
 		})
 
-		// Redirect to the main application
-		http.Redirect(w, r, "/", http.StatusFound)
+		// Redirect to a special URL that the frontend can handle
+		redirectURL := fmt.Sprintf("/?token=%s", signed)
+		http.Redirect(w, r, redirectURL, http.StatusFound)
 		return 0, nil
 	}
 }

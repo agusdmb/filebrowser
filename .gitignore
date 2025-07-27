@@ -42,3 +42,4 @@ build/
 
 default.nix
 Dockerfile.dev
+.claude

@@ -20,7 +20,8 @@
   margin: 0.4em 0 0.67em;
 }
 
-#login form {
+#login form,
+#login .oidc-login {
   position: fixed;
   top: 50%;
   left: 50%;

@@ -273,7 +273,44 @@ func oidcCallbackHandler(tokenExpireTime time.Duration) handleFunc {
 			return http.StatusInternalServerError, err
 		}
 
-		return printToken(w, r, d, user, tokenExpireTime)
+		// Generate JWT token
+		claims := &authToken{
+			User: userInfo{
+				ID:           user.ID,
+				Locale:       user.Locale,
+				ViewMode:     user.ViewMode,
+				SingleClick:  user.SingleClick,
+				Perm:         user.Perm,
+				LockPassword: user.LockPassword,
+				Commands:     user.Commands,
+				HideDotfiles: user.HideDotfiles,
+				DateFormat:   user.DateFormat,
+				Username:     user.Username,
+			},
+			RegisteredClaims: jwt.RegisteredClaims{
+				IssuedAt:  jwt.NewNumericDate(time.Now()),
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenExpireTime)),
+				Issuer:    "File Browser",
+			},
+		}
+
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signed, err := token.SignedString(d.settings.Key)
+		if err != nil {
+			return http.StatusInternalServerError, err
+		}
+
+		// Set cookie and redirect to frontend
+		http.SetCookie(w, &http.Cookie{
+			Name:     "auth",
+			Value:    signed,
+			Path:     "/",
+			SameSite: http.SameSiteStrictMode,
+		})
+
+		// Redirect to the main application
+		http.Redirect(w, r, "/", http.StatusFound)
+		return 0, nil
 	}
 }
 
